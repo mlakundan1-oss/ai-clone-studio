@@ -6,11 +6,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap, LayoutDashboard, Video, Wand2, User, Mic, Captions,
   Image, Users, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  BarChart3, CreditCard, Bell, FolderOpen, Sparkles
+  BarChart3, CreditCard, Bell, FolderOpen, Sparkles, LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+type NavItem =
+  | { divider: true; label: string }
+  | { divider?: false; label: string; href: string; icon: LucideIcon; color: string; badge?: string };
+
+const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, color: "#2563eb" },
   { label: "Projects", href: "/dashboard/projects", icon: FolderOpen, color: "#06b6d4" },
   { label: "Editor", href: "/editor", icon: Video, color: "#7c3aed" },
@@ -73,8 +77,9 @@ export default function Sidebar() {
           }
 
           const isActive = pathname === item.href;
+          const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href!}>
+            <Link key={item.href} href={item.href}>
               <motion.div
                 whileHover={{ x: 2 }}
                 whileTap={{ scale: 0.97 }}
@@ -92,7 +97,7 @@ export default function Sidebar() {
                     style={{ background: item.color }}
                   />
                 )}
-                <item.icon
+                <Icon
                   className="w-5 h-5 shrink-0"
                   style={{ color: isActive ? item.color : undefined }}
                 />

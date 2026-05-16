@@ -92,12 +92,8 @@ function FeatureCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
-      whileHover={{ y: -6, scale: 1.02 }}
+      whileHover={{ y: -6, scale: 1.02, boxShadow: `0 8px 40px ${feature.glow}` }}
       className="group relative glass rounded-2xl p-6 border border-white/[0.07] hover:border-white/[0.15] transition-all duration-400 cursor-pointer overflow-hidden"
-      style={{
-        boxShadow: `0 0 0 rgba(0,0,0,0)`,
-      }}
-      whileHover={{ boxShadow: `0 8px 40px ${feature.glow}` } as never}
     >
       {/* Background gradient on hover */}
       <div
@@ -143,7 +139,8 @@ function FeatureCard({
         </p>
 
         {/* Arrow */}
-        <div className="mt-5 flex items-center gap-2 text-sm font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0"
+        <div
+          className="mt-5 flex items-center gap-2 text-sm font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0"
           style={{ color: feature.color }}
         >
           Explore feature
