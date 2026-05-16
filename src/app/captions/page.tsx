@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Captions, Upload, Sparkles, Play, Download,
-  Loader2, Globe, Type, Sliders, Check, Palette
+  Captions, Upload, Play, Download,
+  Loader2, Globe, Type, Check, Palette, FileVideo
 } from "lucide-react";
 import Topbar from "@/components/dashboard/Topbar";
 import { cn } from "@/lib/utils";
@@ -22,14 +22,6 @@ const languages = ["Auto Detect", "English", "Hindi", "Spanish", "French", "Germ
 const fontSizes = ["Small", "Medium", "Large", "Extra Large"];
 const positions = ["Bottom", "Center", "Top"];
 
-const mockCaptions = [
-  { time: "0:00", text: "Welcome to Ai Clone Studio", highlighted: "Ai Clone Studio" },
-  { time: "0:04", text: "The future of AI video editing", highlighted: "AI video editing" },
-  { time: "0:08", text: "Create viral content in minutes", highlighted: "viral content" },
-  { time: "0:12", text: "Powered by advanced AI technology", highlighted: "AI technology" },
-  { time: "0:16", text: "Start creating today for free!", highlighted: "free!" },
-];
-
 export default function CaptionsPage() {
   const [style, setStyle] = useState("tiktok");
   const [language, setLanguage] = useState("Auto Detect");
@@ -40,21 +32,84 @@ export default function CaptionsPage() {
   const [progress, setProgress] = useState(0);
   const [emojis, setEmojis] = useState(true);
   const [wordHighlight, setWordHighlight] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [captions, setCaptions] = useState<{ time: string; text: string; highlighted: string }[]>([]);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [srtContent, setSrtContent] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedStyle = captionStyles.find(s => s.id === style)!;
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setDone(false);
+      setCaptions([]);
+      setErrorMsg("");
+    }
+  };
+
   const handleGenerate = async () => {
+    if (!selectedFile || generating) return;
     setGenerating(true);
     setDone(false);
     setProgress(0);
+    setErrorMsg("");
+    setCaptions([]);
+
+    // Progress animation
     const iv = setInterval(() => {
-      setProgress(p => { if (p >= 94) { clearInterval(iv); return 94; } return p + Math.random() * 8; });
-    }, 200);
-    await new Promise(r => setTimeout(r, 3000));
-    clearInterval(iv);
-    setProgress(100);
-    setDone(true);
-    setGenerating(false);
+      setProgress(p => {
+        if (p >= 88) { clearInterval(iv); return 88; }
+        return p + Math.random() * 4;
+      });
+    }, 800);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("language", language);
+
+      const res = await fetch("/api/assemblyai", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      clearInterval(iv);
+
+      if (data.error) {
+        setErrorMsg(data.error);
+        setGenerating(false);
+        return;
+      }
+
+      setCaptions(data.captions);
+
+      // Generate SRT content
+      const srt = data.captions.map((c: { time: string; text: string }, i: number) => {
+        return `${i + 1}\n${c.time.replace(":", ":")},000 --> ${c.time.replace(":", ":")},999\n${c.text}\n`;
+      }).join("\n");
+      setSrtContent(srt);
+
+      setProgress(100);
+      setDone(true);
+    } catch {
+      clearInterval(iv);
+      setErrorMsg("Generation failed. API key check karo.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleExportSRT = () => {
+    const blob = new Blob([srtContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "captions.srt";
+    a.click();
   };
 
   return (
@@ -67,13 +122,34 @@ export default function CaptionsPage() {
             {/* Left — Settings */}
             <div className="space-y-4">
               {/* Upload */}
-              <div className="glass rounded-2xl border border-dashed border-white/20 p-6 text-center">
-                <Upload className="w-8 h-8 text-white/30 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-white/60 mb-1">Upload Video</p>
-                <p className="text-xs text-white/30 mb-3">MP4, MOV, WEBM up to 2GB</p>
-                <button className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-xs font-semibold px-4 py-2 rounded-xl">
-                  Choose File
-                </button>
+              <div
+                className="glass rounded-2xl border border-dashed border-white/20 p-6 text-center cursor-pointer hover:border-white/40 transition-all"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*,audio/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                {selectedFile ? (
+                  <>
+                    <FileVideo className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-white mb-1">{selectedFile.name}</p>
+                    <p className="text-xs text-white/30">{(selectedFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    <p className="text-xs text-green-400 mt-2">✅ File ready</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8 text-white/30 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-white/60 mb-1">Upload Video / Audio</p>
+                    <p className="text-xs text-white/30 mb-3">MP4, MOV, MP3, WAV up to 2GB</p>
+                    <button className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-xs font-semibold px-4 py-2 rounded-xl">
+                      Choose File
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Language */}
@@ -138,7 +214,6 @@ export default function CaptionsPage() {
                     ))}
                   </div>
                 </div>
-                {/* Toggles */}
                 {[{ label: "Emoji Captions", val: emojis, set: setEmojis }, { label: "Word Highlight", val: wordHighlight, set: setWordHighlight }].map(t => (
                   <div key={t.label} className="flex items-center justify-between">
                     <span className="text-xs text-white/60">{t.label}</span>
@@ -155,7 +230,6 @@ export default function CaptionsPage() {
 
             {/* Center — Style Picker + Preview */}
             <div className="space-y-4">
-              {/* Style selector */}
               <div className="glass rounded-2xl border border-white/[0.08] p-4">
                 <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Palette className="w-3.5 h-3.5" /> Caption Style
@@ -190,7 +264,6 @@ export default function CaptionsPage() {
                     <Play className="w-10 h-10 text-white/20 mx-auto mb-2" />
                     <p className="text-white/30 text-xs">Video Preview</p>
                   </div>
-                  {/* Caption overlay */}
                   <div className={cn("absolute left-0 right-0 px-4 flex justify-center", position === "Bottom" ? "bottom-4" : position === "Top" ? "top-4" : "top-1/2 -translate-y-1/2")}>
                     <div
                       className="px-4 py-2 rounded-xl text-center font-bold text-lg max-w-xs"
@@ -207,15 +280,14 @@ export default function CaptionsPage() {
               </div>
             </div>
 
-            {/* Right — Captions list + Generate */}
+            {/* Right — Generate + Captions */}
             <div className="space-y-4">
-              {/* Generate */}
               <div className="glass rounded-2xl border border-white/[0.08] p-4">
                 <AnimatePresence>
                   {(generating || done) && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mb-4">
                       <div className="flex justify-between text-xs text-white/50 mb-2">
-                        <span>{done ? "✅ Captions generated!" : "🎙️ Transcribing..."}</span>
+                        <span>{done ? "✅ Captions generated!" : "🎙️ Transcribing with AssemblyAI..."}</span>
                         <span className="font-mono text-blue-400">{Math.round(progress)}%</span>
                       </div>
                       <div className="h-2 bg-white/10 rounded-full overflow-hidden">
@@ -224,37 +296,54 @@ export default function CaptionsPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* Error */}
+                <AnimatePresence>
+                  {errorMsg && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="glass rounded-xl p-3 border border-red-500/30 text-red-400 text-sm mb-3">
+                      ⚠️ {errorMsg}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <motion.button
                   whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                   onClick={handleGenerate}
-                  disabled={generating}
+                  disabled={generating || !selectedFile}
                   className={cn(
                     "w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all",
-                    generating ? "glass border border-white/10 text-white/30 cursor-not-allowed" : "bg-gradient-to-r from-yellow-600 to-orange-600 text-white"
+                    generating || !selectedFile
+                      ? "glass border border-white/10 text-white/30 cursor-not-allowed"
+                      : "bg-gradient-to-r from-yellow-600 to-orange-600 text-white"
                   )}
                 >
-                  {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Captions className="w-4 h-4" /> Auto Generate Captions</>}
+                  {generating
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Transcribing...</>
+                    : <><Captions className="w-4 h-4" /> Generate Captions (AssemblyAI)</>}
                 </motion.button>
-                <p className="text-[10px] text-white/30 text-center mt-2">Uses Whisper AI • Costs 10 credits</p>
+                {!selectedFile && (
+                  <p className="text-[10px] text-white/30 text-center mt-2">⬅️ Pehle video upload karo</p>
+                )}
               </div>
 
               {/* Caption list */}
-              {done && (
+              {done && captions.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl border border-white/[0.08] p-4">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-semibold text-white/40 uppercase tracking-wider">Generated Captions</p>
-                    <button className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                    <button onClick={handleExportSRT} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
                       <Download className="w-3 h-3" /> Export SRT
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    {mockCaptions.map((c, i) => (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {captions.map((c, i) => (
                       <motion.div
                         key={i}
                         initial={{ opacity: 0, x: -12 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className="flex gap-3 p-2.5 glass rounded-xl border border-white/[0.06] hover:border-white/15 cursor-pointer group"
+                        transition={{ delay: i * 0.05 }}
+                        className="flex gap-3 p-2.5 glass rounded-xl border border-white/[0.06] hover:border-white/15 cursor-pointer"
                       >
                         <span className="text-[10px] font-mono text-white/30 shrink-0 mt-0.5">{c.time}</span>
                         <p className="text-xs text-white/70 leading-relaxed">
@@ -270,8 +359,8 @@ export default function CaptionsPage() {
                       </motion.div>
                     ))}
                   </div>
-                  <button className="w-full mt-3 flex items-center justify-center gap-2 glass border border-white/10 rounded-xl py-2.5 text-xs text-white/60 hover:text-white transition-colors">
-                    <Download className="w-3.5 h-3.5" /> Export with Captions
+                  <button onClick={handleExportSRT} className="w-full mt-3 flex items-center justify-center gap-2 glass border border-white/10 rounded-xl py-2.5 text-xs text-white/60 hover:text-white transition-colors">
+                    <Download className="w-3.5 h-3.5" /> Download SRT File
                   </button>
                 </motion.div>
               )}
