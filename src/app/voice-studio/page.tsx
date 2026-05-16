@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Upload, Play, Pause, Wand2, Globe, Volume2, Zap, Check, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Mic, Upload, Play, Pause, Wand2, Globe, Volume2, Zap, Check, Loader2, RefreshCw, Sparkles, Download } from "lucide-react";
 
 import Topbar from "@/components/dashboard/Topbar";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,9 @@ const LANGUAGES = ["English", "Hindi", "Spanish", "French", "German", "Japanese"
 const EMOTIONS = ["Neutral", "Happy", "Sad", "Excited", "Calm", "Serious", "Whispering"];
 
 const savedVoices = [
-  { id: 1, name: "My Voice", lang: "English", trained: true, samples: 12 },
-  { id: 2, name: "Brand Voice", lang: "English", trained: true, samples: 8 },
-  { id: 3, name: "Hindi Narrator", lang: "Hindi", trained: false, samples: 3 },
+  { id: "1", name: "Rachel", lang: "English", trained: true, samples: 12 },
+  { id: "2", name: "Domi", lang: "English", trained: true, samples: 8 },
+  { id: "3", name: "Elli", lang: "Hindi", trained: true, samples: 3 },
 ];
 
 const WaveformBars = ({ active }: { active: boolean }) => (
@@ -34,7 +34,7 @@ const WaveformBars = ({ active }: { active: boolean }) => (
 export default function VoiceStudioPage() {
   const [recording, setRecording] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState(1);
+  const [selectedVoice, setSelectedVoice] = useState("1");
   const [language, setLanguage] = useState("English");
   const [emotion, setEmotion] = useState("Neutral");
   const [text, setText] = useState("Welcome to Ai Clone Studio. The future of AI video creation is here.");
@@ -42,8 +42,9 @@ export default function VoiceStudioPage() {
   const [writingScript, setWritingScript] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ── Claude: Write AI Voiceover Script ──────────────────────────────────────
   const handleWriteScript = async () => {
     if (!text.trim() || writingScript) return;
     setWritingScript(true);
@@ -68,18 +69,78 @@ export default function VoiceStudioPage() {
     }
   };
 
+  // ── Real ElevenLabs API call ──────────────────────────────────────────────
   const handleGenerate = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || generating) return;
     setGenerating(true);
     setGenerated(false);
-    await new Promise(r => setTimeout(r, 2200));
-    setGenerating(false);
-    setGenerated(true);
+    setErrorMsg("");
+    setAudioUrl(null);
+
+    try {
+      const res = await fetch("/api/elevenlabs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          voiceId: selectedVoice,
+          emotion,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setErrorMsg(data.error);
+        setGenerating(false);
+        return;
+      }
+
+      // Convert base64 to audio URL
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))],
+        { type: "audio/mpeg" }
+      );
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      setGenerated(true);
+    } catch {
+      setErrorMsg("Generation failed. API key check karo.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const togglePlay = () => {
+    if (!audioRef.current || !audioUrl) return;
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      audioRef.current.play();
+      setPlaying(true);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!audioUrl) return;
+    const a = document.createElement("a");
+    a.href = audioUrl;
+    a.download = "voice-clone.mp3";
+    a.click();
   };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Topbar title="Voice Clone Studio" />
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          onEnded={() => setPlaying(false)}
+          className="hidden"
+        />
+      )}
       <div className="flex-1 overflow-y-auto p-6">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
@@ -87,7 +148,7 @@ export default function VoiceStudioPage() {
           <div className="absolute inset-0 bg-dots opacity-20" />
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center neon-cyan">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
                 <Mic className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -97,19 +158,18 @@ export default function VoiceStudioPage() {
             </div>
             <div className="glass border border-green-500/20 rounded-xl px-4 py-2 text-center">
               <div className="font-orbitron text-sm font-bold text-green-400">LIVE</div>
-              <div className="text-xs text-white/40">Claude AI</div>
+              <div className="text-xs text-white/40">ElevenLabs</div>
             </div>
           </div>
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left — Voice cloning */}
+          {/* Left — Voice Library */}
           <div className="space-y-4">
             <div className="glass rounded-2xl p-5 border border-white/[0.08]">
               <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
                 <Mic className="w-4 h-4 text-cyan-400" /> Clone Your Voice
               </h3>
-
               <div className="space-y-3 mb-4">
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -127,18 +187,15 @@ export default function VoiceStudioPage() {
                   <span className="text-sm font-medium">{recording ? "🔴 Recording... Click to stop" : "Record Voice Sample"}</span>
                   {recording && <WaveformBars active />}
                 </motion.button>
-
                 <button className="w-full py-3 glass border border-dashed border-white/20 rounded-xl flex items-center justify-center gap-2 text-sm text-white/50 hover:text-white hover:border-white/40 transition-all">
                   <Upload className="w-4 h-4" /> Upload Audio File
                 </button>
               </div>
-
               <div className="text-xs text-white/30 text-center mb-4">
                 Need 30+ seconds for best results. Speak naturally and clearly.
               </div>
-
               <button className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-sm">
-                <Wand2 className="w-4 h-4" /> Train Voice Model — 50 credits
+                <Wand2 className="w-4 h-4" /> Train Voice Model
               </button>
             </div>
 
@@ -188,7 +245,7 @@ export default function VoiceStudioPage() {
                 </div>
               </div>
 
-              {/* ✨ AI Write Script Button */}
+              {/* AI Write Script Button */}
               <div className="mb-3">
                 <button
                   onClick={handleWriteScript}
@@ -212,7 +269,7 @@ export default function VoiceStudioPage() {
                 value={text}
                 onChange={e => setText(e.target.value)}
                 rows={5}
-                placeholder="Type or paste the text you want to convert to speech... Ya upar se Claude se likhwao!"
+                placeholder="Type or paste the text you want to convert to speech..."
                 className="w-full bg-transparent text-white text-sm outline-none resize-none placeholder-white/20 leading-relaxed mb-4"
               />
 
@@ -253,30 +310,28 @@ export default function VoiceStudioPage() {
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={handleGenerate}
-                  disabled={generating}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold rounded-xl neon-blue flex items-center justify-center gap-2 text-sm disabled:opacity-60"
-                >
-                  {generating
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
-                    : <><Wand2 className="w-4 h-4" /> Generate Voice · 5 credits</>}
-                </motion.button>
-              </div>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={handleGenerate}
+                disabled={generating || !text.trim()}
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+              >
+                {generating
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                  : <><Wand2 className="w-4 h-4" /> Generate Voice (ElevenLabs)</>}
+              </motion.button>
             </div>
 
             {/* Generated audio player */}
             <AnimatePresence>
-              {generated && (
+              {generated && audioUrl && (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                   className="glass rounded-2xl p-5 border border-green-500/20"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-sm font-semibold text-white flex items-center gap-2">
-                      <Check className="w-4 h-4 text-green-400" /> Generated Audio Ready
+                      <Check className="w-4 h-4 text-green-400" /> Audio Ready! ✅
                     </p>
                     <button onClick={handleGenerate} className="p-2 glass rounded-lg text-white/40 hover:text-white border border-white/10">
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -287,15 +342,16 @@ export default function VoiceStudioPage() {
                     <div className="flex items-center gap-4">
                       <motion.button
                         whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                        onClick={() => setPlaying(!playing)}
-                        className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 flex items-center justify-center neon-blue shrink-0"
+                        onClick={togglePlay}
+                        className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 flex items-center justify-center shrink-0"
                       >
-                        {playing ? <Pause className="w-4 h-4 text-white" fill="white" /> : <Play className="w-4 h-4 text-white ml-0.5" fill="white" />}
+                        {playing
+                          ? <Pause className="w-4 h-4 text-white" fill="white" />
+                          : <Play className="w-4 h-4 text-white ml-0.5" fill="white" />}
                       </motion.button>
                       <div className="flex-1">
                         <WaveformBars active={playing} />
                       </div>
-                      <span className="text-xs text-white/40 font-mono shrink-0">0:12 / 0:45</span>
                     </div>
                   </div>
 
@@ -309,17 +365,24 @@ export default function VoiceStudioPage() {
                       <div>Emotion</div>
                     </div>
                     <div className="glass rounded-lg p-2 text-center border border-white/[0.06]">
-                      <div className="font-semibold text-white">48kHz</div>
-                      <div>Quality</div>
+                      <div className="font-semibold text-white">MP3</div>
+                      <div>Format</div>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <button className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
-                      <Zap className="w-3.5 h-3.5" /> Add to Video
+                    <button
+                      onClick={handleDownload}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download MP3
                     </button>
-                    <button className="px-4 py-2.5 glass border border-white/10 text-white/60 hover:text-white rounded-xl text-sm transition-colors">
-                      Download
+                    <button
+                      onClick={togglePlay}
+                      className="px-4 py-2.5 glass border border-white/10 text-white/60 hover:text-white rounded-xl text-sm transition-colors flex items-center gap-2"
+                    >
+                      {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {playing ? "Pause" : "Play"}
                     </button>
                   </div>
                 </motion.div>
