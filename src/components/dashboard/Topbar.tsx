@@ -5,7 +5,7 @@ import { Bell, Search, Plus, Zap, ChevronDown, Check } from "lucide-react";
 import { useNotificationsStore } from "@/store";
 import { formatRelativeTime } from "@/lib/utils";
 
-export default function Topbar({ title = "Dashboard" }: { title?: string }) {
+export default function Topbar({ title = "Dashboard", subtitle }: { title?: string; subtitle?: string }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const { notifications, unreadCount, markAsRead, markAllRead } = useNotificationsStore();
 
@@ -14,7 +14,10 @@ export default function Topbar({ title = "Dashboard" }: { title?: string }) {
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] glass">
       <div className="flex items-center gap-4">
-        <h1 className="font-orbitron font-bold text-lg text-white">{title}</h1>
+        <div>
+          <h1 className="font-orbitron font-bold text-lg text-white">{title}</h1>
+          {subtitle && <p className="text-xs text-white/50 mt-0.5">{subtitle}</p>}
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -113,3 +116,4 @@ export default function Topbar({ title = "Dashboard" }: { title?: string }) {
     </header>
   );
 }
+
