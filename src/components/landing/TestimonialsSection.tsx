@@ -81,7 +81,7 @@ export default function TestimonialsSection() {
           </h2>
           <p className="text-lg text-white/50">
             From solo creators to enterprise teams — Ai Clone Studio powers
-            the world's best content.
+            the world&apos;s best content.
           </p>
         </motion.div>
 
